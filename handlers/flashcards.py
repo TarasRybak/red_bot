@@ -5,6 +5,7 @@ from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.types import Message
+from keyboards import localization_manager
 
 router = Router()
 
@@ -37,38 +38,25 @@ async def quiz(message: Message, state: FSMContext):
     flashcard = flashcards[0]
     await state.update_data(chosen_word=flashcard)
     # Ask the user to translate the word
-    await message.reply(f"Translate the word <b>{flashcard['word']}</b> into Spanish:")
-    await state.set_state(QuizState.choosing_2)
+    quiz_message = await localization_manager.get_localized_message(state.key, "quiz", flashcard['word'])
+    await message.reply(text=quiz_message)
+    await state.set_state(QuizState.choosing_1)
 
 
-@router.message(QuizState.choosing_2)
+@router.message(QuizState.choosing_1)
 async def check_answer(message: Message, state: FSMContext):
     user_data = await state.get_data()
     user_data = user_data["chosen_word"]
     # Check if the user's answer is correct
     if message.text.lower() == user_data["translation"]:
-        await message.answer("Correct!")
+        await message.answer(await localization_manager.get_localized_message(state.key, "check_answer_correct"))
         global user_progress
         user_progress[message.from_user.id] = {user_data["word"]: True}
         pass
     else:
-        await message.answer("Incorrect. Please try again.")
-        await quiz(message)  # Ask the user the same question again
+        await message.answer(await localization_manager.get_localized_message(state.key, "check_answer_incorrect"))
+        await quiz()  # Ask the user the same question again
     await state.clear()
-
-
-# Define a command handler for the "/progress" command
-@router.message(Command("progress"))
-async def view_progress(message: Message):
-    # Retrieve the user's progress data
-    if message.from_user.id not in user_progress:
-        await message.reply("You have not started a quiz yet.")
-    else:
-        progress = user_progress[message.from_user.id]
-        num_learned = sum(progress.values())
-        total = len(flashcards)
-        percent = round(num_learned / total * 100)
-        await message.reply(f"You have learned {num_learned} out of {total} flashcards ({percent}%).")
 
 
 # Define a command handler for the "/addflashcard" command
